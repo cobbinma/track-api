@@ -2,19 +2,68 @@
 
 package model
 
-type NewTodo struct {
-	Text   string `json:"text"`
+import (
+	"fmt"
+	"io"
+	"strconv"
+)
+
+type Journey struct {
+	ID     string        `json:"id"`
+	User   *User         `json:"user"`
+	Status JourneyStatus `json:"status"`
+}
+
+type NewJourney struct {
 	UserID string `json:"userId"`
 }
 
-type Todo struct {
-	ID   string `json:"id"`
-	Text string `json:"text"`
-	Done bool   `json:"done"`
-	User *User  `json:"user"`
+type UpdateJourneyStatus struct {
+	ID     string        `json:"id"`
+	Status JourneyStatus `json:"status"`
 }
 
 type User struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID string `json:"id"`
+}
+
+type JourneyStatus string
+
+const (
+	JourneyStatusActive   JourneyStatus = "ACTIVE"
+	JourneyStatusComplete JourneyStatus = "COMPLETE"
+)
+
+var AllJourneyStatus = []JourneyStatus{
+	JourneyStatusActive,
+	JourneyStatusComplete,
+}
+
+func (e JourneyStatus) IsValid() bool {
+	switch e {
+	case JourneyStatusActive, JourneyStatusComplete:
+		return true
+	}
+	return false
+}
+
+func (e JourneyStatus) String() string {
+	return string(e)
+}
+
+func (e *JourneyStatus) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = JourneyStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid JourneyStatus", str)
+	}
+	return nil
+}
+
+func (e JourneyStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
 }

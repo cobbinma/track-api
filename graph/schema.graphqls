@@ -2,27 +2,37 @@
 #
 # https://gqlgen.com/getting-started/
 
-type Todo {
-  id: ID!
-  text: String!
-  done: Boolean!
+scalar UUID
+
+enum JourneyStatus {
+  ACTIVE
+  COMPLETE
+}
+
+type Journey {
+  id: UUID!
   user: User!
+  status: JourneyStatus!
 }
 
 type User {
-  id: ID!
-  name: String!
+  id: UUID!
 }
 
-type Query {
-  todos: [Todo!]!
+type Subscription {
+  journey(id: UUID!): Journey!
 }
 
-input NewTodo {
-  text: String!
-  userId: String!
+input NewJourney {
+  userId: UUID!
+}
+
+input UpdateJourneyStatus {
+  id: UUID!
+  status: JourneyStatus!
 }
 
 type Mutation {
-  createTodo(input: NewTodo!): Todo!
+  createJourney(input: NewJourney!): Journey!
+  updateJourneyStatus(input: UpdateJourneyStatus!): Journey!
 }
