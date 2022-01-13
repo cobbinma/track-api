@@ -7,13 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-	"time"
-
 	"github.com/ably/ably-go/ably"
 	"github.com/cobbinma/track-api/graph/generated"
 	"github.com/cobbinma/track-api/graph/model"
 	"github.com/google/uuid"
+	"log"
 )
 
 func (r *mutationResolver) CreateJourney(ctx context.Context, input model.NewJourney) (*model.Journey, error) {
@@ -72,25 +70,25 @@ func (r *subscriptionResolver) Journey(ctx context.Context, id string) (<-chan *
 
 	go func(ch chan *model.Journey) {
 		log.Println("follower joined")
-		channel := r.queue.Channels.Get(id)
-		for {
-			_, err := channel.SubscribeAll(ctx, func(msg *ably.Message) {
-				if data, ok := msg.Data.(string); ok {
-					log.Println(data)
-					var journey *model.Journey
-					if err := json.Unmarshal([]byte(data), &journey); err != nil {
-						panic(err)
-					}
-					ch <- journey
-				} else {
-					panic(fmt.Sprintf("unsupported message type: %T", msg.Data))
+		defer log.Println("follower left")
+		unsubscribe, err := r.queue.Channels.Get(id).SubscribeAll(ctx, func(msg *ably.Message) {
+			if data, ok := msg.Data.(string); ok {
+				log.Println(data)
+				var journey *model.Journey
+				if err := json.Unmarshal([]byte(data), &journey); err != nil {
+					panic(err)
 				}
-			})
-			if err != nil {
-				panic(err)
+				ch <- journey
+			} else {
+				panic(fmt.Sprintf("unsupported message type: %T", msg.Data))
 			}
-			time.Sleep(5 * time.Second)
+		})
+		if err != nil {
+			panic(err)
 		}
+		defer unsubscribe()
+
+		<-ctx.Done()
 	}(ch)
 
 	return ch, nil
