@@ -86,9 +86,10 @@ func (r *subscriptionResolver) Journey(ctx context.Context, id string) (<-chan *
 		if err != nil {
 			panic(err)
 		}
-		defer unsubscribe()
 
 		<-ctx.Done()
+		unsubscribe()
+		close(ch)
 	}(ch)
 
 	return ch, nil
