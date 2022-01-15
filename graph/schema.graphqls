@@ -16,7 +16,7 @@ type Journey {
 }
 
 type User {
-  id: UUID!
+  id: ID!
 }
 
 type Subscription {
@@ -24,7 +24,7 @@ type Subscription {
 }
 
 input NewJourney {
-  userId: UUID!
+  userId: ID!
 }
 
 input UpdateJourneyStatus {

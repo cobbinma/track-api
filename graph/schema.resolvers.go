@@ -7,11 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+
 	"github.com/ably/ably-go/ably"
 	"github.com/cobbinma/track-api/graph/generated"
 	"github.com/cobbinma/track-api/graph/model"
 	"github.com/google/uuid"
-	"log"
 )
 
 func (r *mutationResolver) CreateJourney(_ context.Context, input model.NewJourney) (*model.Journey, error) {
