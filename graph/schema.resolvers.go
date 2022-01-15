@@ -14,7 +14,7 @@ import (
 	"log"
 )
 
-func (r *mutationResolver) CreateJourney(ctx context.Context, input model.NewJourney) (*model.Journey, error) {
+func (r *mutationResolver) CreateJourney(_ context.Context, input model.NewJourney) (*model.Journey, error) {
 	id := uuid.New()
 	journey := &model.Journey{
 		ID:     id.String(),
@@ -46,7 +46,8 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 		channel := r.queue.Channels.Get(input.ID)
 		message, err := json.Marshal(room.journey)
 		if err != nil {
-			panic(err)
+			log.Println("ERROR: ", err)
+			return nil, err
 		}
 		if err := channel.Publish(ctx, "JourneyUpdate", string(message)); err != nil {
 			panic(err)
@@ -73,23 +74,24 @@ func (r *subscriptionResolver) Journey(ctx context.Context, id string) (<-chan *
 		defer log.Println("follower left")
 		unsubscribe, err := r.queue.Channels.Get(id).SubscribeAll(ctx, func(msg *ably.Message) {
 			if data, ok := msg.Data.(string); ok {
-				log.Println(data)
 				var journey *model.Journey
 				if err := json.Unmarshal([]byte(data), &journey); err != nil {
-					panic(err)
+					log.Println("ERROR: ", err)
+					return
 				}
 				ch <- journey
 			} else {
-				panic(fmt.Sprintf("unsupported message type: %T", msg.Data))
+				log.Println(fmt.Sprintf("unsupported message type: %T", msg.Data))
+				return
 			}
 		})
 		if err != nil {
-			panic(err)
+			log.Println("ERROR: ", err)
+			return
 		}
 
 		<-ctx.Done()
 		unsubscribe()
-		close(ch)
 	}(ch)
 
 	return ch, nil
