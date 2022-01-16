@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	jwtmiddleware "github.com/auth0/go-jwt-middleware/v2"
+	"github.com/auth0/go-jwt-middleware/v2/validator"
 	"log"
 
 	"github.com/ably/ably-go/ably"
@@ -15,11 +17,17 @@ import (
 	"github.com/google/uuid"
 )
 
-func (r *mutationResolver) CreateJourney(_ context.Context, input model.NewJourney) (*model.Journey, error) {
+func (r *mutationResolver) CreateJourney(ctx context.Context, input model.NewJourney) (*model.Journey, error) {
 	id := uuid.New()
+	claims, ok := ctx.Value(jwtmiddleware.ContextKey{}).(*validator.ValidatedClaims)
+	if !ok {
+		log.Println("no claims in context")
+		return nil, fmt.Errorf("no claims")
+	}
+
 	journey := &model.Journey{
 		ID:     id.String(),
-		User:   &model.User{ID: input.UserID},
+		User:   &model.User{ID: claims.RegisteredClaims.Subject},
 		Status: model.JourneyStatusActive,
 	}
 	r.mu.Lock()
@@ -32,11 +40,22 @@ func (r *mutationResolver) CreateJourney(_ context.Context, input model.NewJourn
 }
 
 func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.UpdateJourneyStatus) (*model.Journey, error) {
+	claims, ok := ctx.Value(jwtmiddleware.ContextKey{}).(*validator.ValidatedClaims)
+	if !ok {
+		log.Println("no claims in context")
+		return nil, fmt.Errorf("no claims in context")
+	}
+
 	r.mu.RLock()
 	room, ok := r.rooms[input.ID]
 	r.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("journey not found")
+	}
+
+	if user := claims.RegisteredClaims.Subject; room.journey.ID != user {
+		log.Printf("unauthorized subject %q attempting to update journey %q", user, room.journey.ID)
+		return nil, fmt.Errorf("unauthorized")
 	}
 
 	if room.journey.Status != input.Status {
@@ -47,11 +66,11 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 		channel := r.queue.Channels.Get(input.ID)
 		message, err := json.Marshal(room.journey)
 		if err != nil {
-			log.Println("ERROR: ", err)
+			log.Println("unable to marshal : ", err)
 			return nil, err
 		}
 		if err := channel.Publish(ctx, "JourneyUpdate", string(message)); err != nil {
-			log.Println("ERROR: ", err)
+			log.Println("unable to publish : ", err)
 			return nil, err
 		}
 	}
@@ -60,7 +79,12 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 }
 
 func (r *subscriptionResolver) Journey(ctx context.Context, id string) (<-chan *model.Journey, error) {
-	log.Println("subscription to journey: ", id)
+	claims, ok := ctx.Value(jwtmiddleware.ContextKey{}).(*validator.ValidatedClaims)
+	if !ok {
+		log.Println("no claims in context")
+		return nil, fmt.Errorf("no claims in context")
+	}
+	log.Printf("%q followed journey: %q\n", claims.RegisteredClaims.Subject, id)
 	ch := make(chan *model.Journey, 1)
 
 	r.mu.RLock()
@@ -72,13 +96,11 @@ func (r *subscriptionResolver) Journey(ctx context.Context, id string) (<-chan *
 	ch <- room.journey
 
 	go func(ch chan *model.Journey) {
-		log.Println("follower joined")
-		defer log.Println("follower left")
 		unsubscribe, err := r.queue.Channels.Get(id).SubscribeAll(ctx, func(msg *ably.Message) {
 			if data, ok := msg.Data.(string); ok {
 				var journey *model.Journey
 				if err := json.Unmarshal([]byte(data), &journey); err != nil {
-					log.Println("ERROR: ", err)
+					log.Println("unable to unmarshal : ", err)
 					return
 				}
 				ch <- journey
@@ -88,7 +110,7 @@ func (r *subscriptionResolver) Journey(ctx context.Context, id string) (<-chan *
 			}
 		})
 		if err != nil {
-			log.Println("ERROR: ", err)
+			log.Println("unable to subscribe : ", err)
 			return
 		}
 

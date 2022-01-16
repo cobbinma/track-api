@@ -49,13 +49,19 @@ func NewRouter(e *echo.Echo, srv *handler.Server) *echo.Echo {
 		},
 		KeepAlivePingInterval: 10 * time.Second,
 		InitFunc: func(ctx context.Context, p transport.InitPayload) (context.Context, error) {
-			if _, err := jwtValidator.ValidateToken(ctx,
-				strings.TrimPrefix(p.Authorization(), "Bearer ")); err != nil {
+			token, err := jwtValidator.ValidateToken(ctx, strings.TrimPrefix(p.Authorization(), "Bearer "))
+			if err != nil {
 				log.Println("unable to initialise websocket connection : ", err)
 				return nil, err
 			}
 
-			return ctx, nil
+			claims, ok := token.(*validator.ValidatedClaims)
+			if !ok {
+				log.Println("unexpected token format")
+				return nil, err
+			}
+
+			return context.WithValue(ctx, jwtmiddleware.ContextKey{}, claims), nil
 		},
 	})
 	srv.AddTransport(transport.POST{})
