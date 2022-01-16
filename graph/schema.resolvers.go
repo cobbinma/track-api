@@ -53,7 +53,7 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 		return nil, fmt.Errorf("journey not found")
 	}
 
-	if user := claims.RegisteredClaims.Subject; room.journey.ID != user {
+	if user := claims.RegisteredClaims.Subject; room.journey.User.ID != user {
 		log.Printf("unauthorized subject %q attempting to update journey %q", user, room.journey.ID)
 		return nil, fmt.Errorf("unauthorized")
 	}
