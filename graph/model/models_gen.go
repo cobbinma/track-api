@@ -14,10 +14,6 @@ type Journey struct {
 	Status JourneyStatus `json:"status"`
 }
 
-type NewJourney struct {
-	UserID string `json:"userId"`
-}
-
 type UpdateJourneyStatus struct {
 	ID     string        `json:"id"`
 	Status JourneyStatus `json:"status"`

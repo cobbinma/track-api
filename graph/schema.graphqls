@@ -23,16 +23,12 @@ type Subscription {
   journey(id: UUID!): Journey!
 }
 
-input NewJourney {
-  userId: ID!
-}
-
 input UpdateJourneyStatus {
   id: UUID!
   status: JourneyStatus!
 }
 
 type Mutation {
-  createJourney(input: NewJourney!): Journey!
+  createJourney: Journey!
   updateJourneyStatus(input: UpdateJourneyStatus!): Journey!
 }

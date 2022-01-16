@@ -7,17 +7,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	jwtmiddleware "github.com/auth0/go-jwt-middleware/v2"
-	"github.com/auth0/go-jwt-middleware/v2/validator"
 	"log"
 
 	"github.com/ably/ably-go/ably"
+	jwtmiddleware "github.com/auth0/go-jwt-middleware/v2"
+	"github.com/auth0/go-jwt-middleware/v2/validator"
 	"github.com/cobbinma/track-api/graph/generated"
 	"github.com/cobbinma/track-api/graph/model"
 	"github.com/google/uuid"
 )
 
-func (r *mutationResolver) CreateJourney(ctx context.Context, input model.NewJourney) (*model.Journey, error) {
+func (r *mutationResolver) CreateJourney(ctx context.Context) (*model.Journey, error) {
 	id := uuid.New()
 	claims, ok := ctx.Value(jwtmiddleware.ContextKey{}).(*validator.ValidatedClaims)
 	if !ok {
