@@ -51,7 +51,8 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 			return nil, err
 		}
 		if err := channel.Publish(ctx, "JourneyUpdate", string(message)); err != nil {
-			panic(err)
+			log.Println("ERROR: ", err)
+			return nil, err
 		}
 	}
 
