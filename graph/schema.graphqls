@@ -9,10 +9,16 @@ enum JourneyStatus {
   COMPLETE
 }
 
+type Position {
+  lat: Float!
+  lng: Float!
+}
+
 type Journey {
   id: UUID!
   user: User!
   status: JourneyStatus!
+  position: Position
 }
 
 type User {
@@ -28,7 +34,18 @@ input UpdateJourneyStatus {
   status: JourneyStatus!
 }
 
+input UpdateJourneyPosition {
+  id: UUID!
+  position: NewPosition!
+}
+
+input NewPosition {
+  lat: Float!
+  lng: Float!
+}
+
 type Mutation {
   createJourney: Journey!
   updateJourneyStatus(input: UpdateJourneyStatus!): Journey!
+  updateJourneyPosition(input: UpdateJourneyPosition!): Journey!
 }

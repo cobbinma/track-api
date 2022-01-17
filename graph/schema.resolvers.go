@@ -62,6 +62,9 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 		log.Println("updating journey status")
 		r.mu.Lock()
 		room.journey.Status = input.Status
+		if input.Status == model.JourneyStatusComplete {
+			room.journey.Position = nil
+		}
 		r.mu.Unlock()
 		channel := r.queue.Channels.Get(input.ID)
 		message, err := json.Marshal(room.journey)
@@ -73,6 +76,51 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 			log.Println("unable to publish : ", err)
 			return nil, err
 		}
+	}
+
+	return room.journey, nil
+}
+
+func (r *mutationResolver) UpdateJourneyPosition(ctx context.Context, input model.UpdateJourneyPosition) (*model.Journey, error) {
+	claims, ok := ctx.Value(jwtmiddleware.ContextKey{}).(*validator.ValidatedClaims)
+	if !ok {
+		log.Println("no claims in context")
+		return nil, fmt.Errorf("no claims in context")
+	}
+
+	r.mu.RLock()
+	room, ok := r.rooms[input.ID]
+	r.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("journey not found")
+	}
+
+	if user := claims.RegisteredClaims.Subject; room.journey.User.ID != user {
+		log.Printf("unauthorized subject %q attempting to update journey %q", user, room.journey.ID)
+		return nil, fmt.Errorf("unauthorized")
+	}
+
+	if status := room.journey.Status; status != model.JourneyStatusActive {
+		log.Printf("unable to update position for journey %q, status is %q", room.journey.ID, status)
+		return nil, fmt.Errorf("unsupported update status")
+	}
+
+	log.Println("updating journey status")
+	r.mu.Lock()
+	room.journey.Position = &model.Position{
+		Lat: input.Position.Lat,
+		Lng: input.Position.Lng,
+	}
+	r.mu.Unlock()
+	channel := r.queue.Channels.Get(input.ID)
+	message, err := json.Marshal(room.journey)
+	if err != nil {
+		log.Println("unable to marshal : ", err)
+		return nil, err
+	}
+	if err := channel.Publish(ctx, "JourneyUpdate", string(message)); err != nil {
+		log.Println("unable to publish : ", err)
+		return nil, err
 	}
 
 	return room.journey, nil

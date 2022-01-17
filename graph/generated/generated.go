@@ -44,14 +44,21 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	Journey struct {
-		ID     func(childComplexity int) int
-		Status func(childComplexity int) int
-		User   func(childComplexity int) int
+		ID       func(childComplexity int) int
+		Position func(childComplexity int) int
+		Status   func(childComplexity int) int
+		User     func(childComplexity int) int
 	}
 
 	Mutation struct {
-		CreateJourney       func(childComplexity int) int
-		UpdateJourneyStatus func(childComplexity int, input model.UpdateJourneyStatus) int
+		CreateJourney         func(childComplexity int) int
+		UpdateJourneyPosition func(childComplexity int, input model.UpdateJourneyPosition) int
+		UpdateJourneyStatus   func(childComplexity int, input model.UpdateJourneyStatus) int
+	}
+
+	Position struct {
+		Lat func(childComplexity int) int
+		Lng func(childComplexity int) int
 	}
 
 	Query struct {
@@ -69,6 +76,7 @@ type ComplexityRoot struct {
 type MutationResolver interface {
 	CreateJourney(ctx context.Context) (*model.Journey, error)
 	UpdateJourneyStatus(ctx context.Context, input model.UpdateJourneyStatus) (*model.Journey, error)
+	UpdateJourneyPosition(ctx context.Context, input model.UpdateJourneyPosition) (*model.Journey, error)
 }
 type SubscriptionResolver interface {
 	Journey(ctx context.Context, id string) (<-chan *model.Journey, error)
@@ -96,6 +104,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Journey.ID(childComplexity), true
 
+	case "Journey.position":
+		if e.complexity.Journey.Position == nil {
+			break
+		}
+
+		return e.complexity.Journey.Position(childComplexity), true
+
 	case "Journey.status":
 		if e.complexity.Journey.Status == nil {
 			break
@@ -117,6 +132,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.CreateJourney(childComplexity), true
 
+	case "Mutation.updateJourneyPosition":
+		if e.complexity.Mutation.UpdateJourneyPosition == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateJourneyPosition_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.UpdateJourneyPosition(childComplexity, args["input"].(model.UpdateJourneyPosition)), true
+
 	case "Mutation.updateJourneyStatus":
 		if e.complexity.Mutation.UpdateJourneyStatus == nil {
 			break
@@ -128,6 +155,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.UpdateJourneyStatus(childComplexity, args["input"].(model.UpdateJourneyStatus)), true
+
+	case "Position.lat":
+		if e.complexity.Position.Lat == nil {
+			break
+		}
+
+		return e.complexity.Position.Lat(childComplexity), true
+
+	case "Position.lng":
+		if e.complexity.Position.Lng == nil {
+			break
+		}
+
+		return e.complexity.Position.Lng(childComplexity), true
 
 	case "Subscription.journey":
 		if e.complexity.Subscription.Journey == nil {
@@ -240,10 +281,16 @@ enum JourneyStatus {
   COMPLETE
 }
 
+type Position {
+  lat: Float!
+  lng: Float!
+}
+
 type Journey {
   id: UUID!
   user: User!
   status: JourneyStatus!
+  position: Position
 }
 
 type User {
@@ -259,9 +306,20 @@ input UpdateJourneyStatus {
   status: JourneyStatus!
 }
 
+input UpdateJourneyPosition {
+  id: UUID!
+  position: NewPosition!
+}
+
+input NewPosition {
+  lat: Float!
+  lng: Float!
+}
+
 type Mutation {
   createJourney: Journey!
   updateJourneyStatus(input: UpdateJourneyStatus!): Journey!
+  updateJourneyPosition(input: UpdateJourneyPosition!): Journey!
 }
 `, BuiltIn: false},
 }
@@ -270,6 +328,21 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // endregion ************************** generated!.gotpl **************************
 
 // region    ***************************** args.gotpl *****************************
+
+func (ec *executionContext) field_Mutation_updateJourneyPosition_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.UpdateJourneyPosition
+	if tmp, ok := rawArgs["input"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+		arg0, err = ec.unmarshalNUpdateJourneyPosition2githubᚗcomᚋcobbinmaᚋtrackᚑapiᚋgraphᚋmodelᚐUpdateJourneyPosition(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["input"] = arg0
+	return args, nil
+}
 
 func (ec *executionContext) field_Mutation_updateJourneyStatus_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
@@ -459,6 +532,38 @@ func (ec *executionContext) _Journey_status(ctx context.Context, field graphql.C
 	return ec.marshalNJourneyStatus2githubᚗcomᚋcobbinmaᚋtrackᚑapiᚋgraphᚋmodelᚐJourneyStatus(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _Journey_position(ctx context.Context, field graphql.CollectedField, obj *model.Journey) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Journey",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Position, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.Position)
+	fc.Result = res
+	return ec.marshalOPosition2ᚖgithubᚗcomᚋcobbinmaᚋtrackᚑapiᚋgraphᚋmodelᚐPosition(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _Mutation_createJourney(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -534,6 +639,118 @@ func (ec *executionContext) _Mutation_updateJourneyStatus(ctx context.Context, f
 	res := resTmp.(*model.Journey)
 	fc.Result = res
 	return ec.marshalNJourney2ᚖgithubᚗcomᚋcobbinmaᚋtrackᚑapiᚋgraphᚋmodelᚐJourney(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Mutation_updateJourneyPosition(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Mutation_updateJourneyPosition_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().UpdateJourneyPosition(rctx, args["input"].(model.UpdateJourneyPosition))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Journey)
+	fc.Result = res
+	return ec.marshalNJourney2ᚖgithubᚗcomᚋcobbinmaᚋtrackᚑapiᚋgraphᚋmodelᚐJourney(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Position_lat(ctx context.Context, field graphql.CollectedField, obj *model.Position) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Position",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Lat, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Position_lng(ctx context.Context, field graphql.CollectedField, obj *model.Position) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Position",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Lng, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -1816,6 +2033,68 @@ func (ec *executionContext) ___Type_ofType(ctx context.Context, field graphql.Co
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputNewPosition(ctx context.Context, obj interface{}) (model.NewPosition, error) {
+	var it model.NewPosition
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	for k, v := range asMap {
+		switch k {
+		case "lat":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("lat"))
+			it.Lat, err = ec.unmarshalNFloat2float64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "lng":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("lng"))
+			it.Lng, err = ec.unmarshalNFloat2float64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputUpdateJourneyPosition(ctx context.Context, obj interface{}) (model.UpdateJourneyPosition, error) {
+	var it model.UpdateJourneyPosition
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	for k, v := range asMap {
+		switch k {
+		case "id":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+			it.ID, err = ec.unmarshalNUUID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "position":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("position"))
+			it.Position, err = ec.unmarshalNNewPosition2ᚖgithubᚗcomᚋcobbinmaᚋtrackᚑapiᚋgraphᚋmodelᚐNewPosition(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputUpdateJourneyStatus(ctx context.Context, obj interface{}) (model.UpdateJourneyStatus, error) {
 	var it model.UpdateJourneyStatus
 	asMap := map[string]interface{}{}
@@ -1881,6 +2160,8 @@ func (ec *executionContext) _Journey(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
+		case "position":
+			out.Values[i] = ec._Journey_position(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -1914,6 +2195,43 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			}
 		case "updateJourneyStatus":
 			out.Values[i] = ec._Mutation_updateJourneyStatus(ctx, field)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "updateJourneyPosition":
+			out.Values[i] = ec._Mutation_updateJourneyPosition(ctx, field)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var positionImplementors = []string{"Position"}
+
+func (ec *executionContext) _Position(ctx context.Context, sel ast.SelectionSet, obj *model.Position) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, positionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Position")
+		case "lat":
+			out.Values[i] = ec._Position_lat(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "lng":
+			out.Values[i] = ec._Position_lng(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
@@ -2270,6 +2588,21 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
+func (ec *executionContext) unmarshalNFloat2float64(ctx context.Context, v interface{}) (float64, error) {
+	res, err := graphql.UnmarshalFloat(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNFloat2float64(ctx context.Context, sel ast.SelectionSet, v float64) graphql.Marshaler {
+	res := graphql.MarshalFloat(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+	}
+	return res
+}
+
 func (ec *executionContext) unmarshalNID2string(ctx context.Context, v interface{}) (string, error) {
 	res, err := graphql.UnmarshalID(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -2309,6 +2642,11 @@ func (ec *executionContext) marshalNJourneyStatus2githubᚗcomᚋcobbinmaᚋtrac
 	return v
 }
 
+func (ec *executionContext) unmarshalNNewPosition2ᚖgithubᚗcomᚋcobbinmaᚋtrackᚑapiᚋgraphᚋmodelᚐNewPosition(ctx context.Context, v interface{}) (*model.NewPosition, error) {
+	res, err := ec.unmarshalInputNewPosition(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNString2string(ctx context.Context, v interface{}) (string, error) {
 	res, err := graphql.UnmarshalString(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -2337,6 +2675,11 @@ func (ec *executionContext) marshalNUUID2string(ctx context.Context, sel ast.Sel
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNUpdateJourneyPosition2githubᚗcomᚋcobbinmaᚋtrackᚑapiᚋgraphᚋmodelᚐUpdateJourneyPosition(ctx context.Context, v interface{}) (model.UpdateJourneyPosition, error) {
+	res, err := ec.unmarshalInputUpdateJourneyPosition(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNUpdateJourneyStatus2githubᚗcomᚋcobbinmaᚋtrackᚑapiᚋgraphᚋmodelᚐUpdateJourneyStatus(ctx context.Context, v interface{}) (model.UpdateJourneyStatus, error) {
@@ -2633,6 +2976,13 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 		return graphql.Null
 	}
 	return graphql.MarshalBoolean(*v)
+}
+
+func (ec *executionContext) marshalOPosition2ᚖgithubᚗcomᚋcobbinmaᚋtrackᚑapiᚋgraphᚋmodelᚐPosition(ctx context.Context, sel ast.SelectionSet, v *model.Position) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Position(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOString2string(ctx context.Context, v interface{}) (string, error) {

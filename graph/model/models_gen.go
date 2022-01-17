@@ -9,9 +9,25 @@ import (
 )
 
 type Journey struct {
-	ID     string        `json:"id"`
-	User   *User         `json:"user"`
-	Status JourneyStatus `json:"status"`
+	ID       string        `json:"id"`
+	User     *User         `json:"user"`
+	Status   JourneyStatus `json:"status"`
+	Position *Position     `json:"position"`
+}
+
+type NewPosition struct {
+	Lat float64 `json:"lat"`
+	Lng float64 `json:"lng"`
+}
+
+type Position struct {
+	Lat float64 `json:"lat"`
+	Lng float64 `json:"lng"`
+}
+
+type UpdateJourneyPosition struct {
+	ID       string       `json:"id"`
+	Position *NewPosition `json:"position"`
 }
 
 type UpdateJourneyStatus struct {

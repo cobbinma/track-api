@@ -15,7 +15,7 @@ import (
 
 type Resolver struct {
 	queue *ably.Realtime
-	mu    sync.RWMutex
+	mu    sync.RWMutex // nolint: structcheck
 	rooms map[string]*Room
 }
 
