@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson"
 	"log"
 
 	"github.com/ably/ably-go/ably"
@@ -30,10 +31,11 @@ func (r *mutationResolver) CreateJourney(ctx context.Context) (*model.Journey, e
 		User:   &model.User{ID: claims.RegisteredClaims.Subject},
 		Status: model.JourneyStatusActive,
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.rooms[id.String()] = &Room{
-		journey: journey,
+
+	if _, err := r.mongo.Database("track_db").
+		Collection("journeys").InsertOne(ctx, journey); err != nil {
+		log.Printf("unable to insert journey : %s", err)
+		return nil, fmt.Errorf("unable to insert journey")
 	}
 
 	return journey, nil
@@ -46,28 +48,32 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 		return nil, fmt.Errorf("no claims in context")
 	}
 
-	r.mu.RLock()
-	room, ok := r.rooms[input.ID]
-	r.mu.RUnlock()
-	if !ok {
+	var journey = &model.Journey{}
+	collection := r.mongo.Database("track_db").Collection("journeys")
+	if err := collection.FindOne(ctx, bson.D{{"id", input.ID}}).Decode(journey); err != nil {
+		log.Printf("unable to find journey : %s", err)
 		return nil, fmt.Errorf("journey not found")
 	}
 
-	if user := claims.RegisteredClaims.Subject; room.journey.User.ID != user {
-		log.Printf("unauthorized subject %q attempting to update journey %q", user, room.journey.ID)
+	if user := claims.RegisteredClaims.Subject; journey.User.ID != user {
+		log.Printf("unauthorized subject %q attempting to update journey %q", user, journey.ID)
 		return nil, fmt.Errorf("unauthorized")
 	}
 
-	if room.journey.Status != input.Status {
+	if journey.Status != input.Status {
 		log.Println("updating journey status")
-		r.mu.Lock()
-		room.journey.Status = input.Status
+		journey.Status = input.Status
 		if input.Status == model.JourneyStatusComplete {
-			room.journey.Position = nil
+			journey.Position = nil
 		}
-		r.mu.Unlock()
+
+		if _, err := collection.InsertOne(ctx, journey); err != nil {
+			log.Printf("unable to insert journey : %s", err)
+			return nil, fmt.Errorf("unable to insert journey")
+		}
+
 		channel := r.queue.Channels.Get(input.ID)
-		message, err := json.Marshal(room.journey)
+		message, err := json.Marshal(journey)
 		if err != nil {
 			log.Println("unable to marshal : ", err)
 			return nil, err
@@ -78,7 +84,7 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 		}
 	}
 
-	return room.journey, nil
+	return journey, nil
 }
 
 func (r *mutationResolver) UpdateJourneyPosition(ctx context.Context, input model.UpdateJourneyPosition) (*model.Journey, error) {
@@ -88,32 +94,36 @@ func (r *mutationResolver) UpdateJourneyPosition(ctx context.Context, input mode
 		return nil, fmt.Errorf("no claims in context")
 	}
 
-	r.mu.RLock()
-	room, ok := r.rooms[input.ID]
-	r.mu.RUnlock()
-	if !ok {
+	var journey = &model.Journey{}
+	collection := r.mongo.Database("track_db").Collection("journeys")
+	if err := collection.FindOne(ctx, bson.D{{"id", input.ID}}).Decode(journey); err != nil {
+		log.Printf("unable to find journey : %s", err)
 		return nil, fmt.Errorf("journey not found")
 	}
 
-	if user := claims.RegisteredClaims.Subject; room.journey.User.ID != user {
-		log.Printf("unauthorized subject %q attempting to update journey %q", user, room.journey.ID)
+	if user := claims.RegisteredClaims.Subject; journey.User.ID != user {
+		log.Printf("unauthorized subject %q attempting to update journey %q", user, journey.ID)
 		return nil, fmt.Errorf("unauthorized")
 	}
 
-	if status := room.journey.Status; status != model.JourneyStatusActive {
-		log.Printf("unable to update position for journey %q, status is %q", room.journey.ID, status)
+	if status := journey.Status; status != model.JourneyStatusActive {
+		log.Printf("unable to update position for journey %q, status is %q", journey.ID, status)
 		return nil, fmt.Errorf("unsupported update status")
 	}
 
 	log.Println("updating journey status")
-	r.mu.Lock()
-	room.journey.Position = &model.Position{
+	journey.Position = &model.Position{
 		Lat: input.Position.Lat,
 		Lng: input.Position.Lng,
 	}
-	r.mu.Unlock()
+
+	if _, err := collection.InsertOne(ctx, journey); err != nil {
+		log.Println("unable to insert journey in mongodb : ", err)
+		return nil, fmt.Errorf("unable to insert journey")
+	}
+
 	channel := r.queue.Channels.Get(input.ID)
-	message, err := json.Marshal(room.journey)
+	message, err := json.Marshal(journey)
 	if err != nil {
 		log.Println("unable to marshal : ", err)
 		return nil, err
@@ -123,7 +133,7 @@ func (r *mutationResolver) UpdateJourneyPosition(ctx context.Context, input mode
 		return nil, err
 	}
 
-	return room.journey, nil
+	return journey, nil
 }
 
 func (r *subscriptionResolver) Journey(ctx context.Context, id string) (<-chan *model.Journey, error) {
@@ -135,23 +145,23 @@ func (r *subscriptionResolver) Journey(ctx context.Context, id string) (<-chan *
 	log.Printf("%q followed journey: %q\n", claims.RegisteredClaims.Subject, id)
 	ch := make(chan *model.Journey, 1)
 
-	r.mu.RLock()
-	room, ok := r.rooms[id]
-	r.mu.RUnlock()
-	if !ok {
+	var journey = &model.Journey{}
+	if err := r.mongo.Database("track_db").Collection("journeys").
+		FindOne(ctx, bson.D{{"id", id}}).Decode(journey); err != nil {
+		log.Println("unable to find journey : ", err)
 		return nil, fmt.Errorf("journey not found")
 	}
-	ch <- room.journey
+	ch <- journey
 
 	go func(ch chan *model.Journey) {
 		unsubscribe, err := r.queue.Channels.Get(id).SubscribeAll(ctx, func(msg *ably.Message) {
 			if data, ok := msg.Data.(string); ok {
-				var journey *model.Journey
-				if err := json.Unmarshal([]byte(data), &journey); err != nil {
+				var j = &model.Journey{}
+				if err := json.Unmarshal([]byte(data), j); err != nil {
 					log.Println("unable to unmarshal : ", err)
 					return
 				}
-				ch <- journey
+				ch <- j
 			} else {
 				log.Println(fmt.Sprintf("unsupported message type: %T", msg.Data))
 				return

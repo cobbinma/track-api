@@ -4,6 +4,7 @@ package graph
 import (
 	"github.com/ably/ably-go/ably"
 	"github.com/cobbinma/track-api/graph/model"
+	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"os"
 	"sync"
@@ -17,13 +18,14 @@ type Resolver struct {
 	queue *ably.Realtime
 	mu    sync.RWMutex // nolint: structcheck
 	rooms map[string]*Room
+	mongo *mongo.Client
 }
 
 type Room struct {
 	journey *model.Journey
 }
 
-func NewResolver() *Resolver {
+func NewResolver(mongo *mongo.Client) *Resolver {
 	key := os.Getenv("ABLY_API_KEY")
 	if key == "" {
 		log.Fatalf("key not given")
@@ -36,5 +38,6 @@ func NewResolver() *Resolver {
 	return &Resolver{
 		queue: queue,
 		rooms: map[string]*Room{},
+		mongo: mongo,
 	}
 }
