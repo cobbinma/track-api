@@ -21,7 +21,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(os.Getenv("MONGO_DB_URL")))
+	client, err := mongo.Connect(ctx, options.Client().
+		ApplyURI(os.Getenv("MONGO_DB_URL")).
+		SetServerAPIOptions(options.ServerAPI(options.ServerAPIVersion1)))
 	if err != nil {
 		panic(err)
 	}
