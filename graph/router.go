@@ -49,8 +49,9 @@ func NewRouter(e *echo.Echo, srv *handler.Server) *echo.Echo {
 				}
 				return match
 			},
-			ReadBufferSize:  1024,
-			WriteBufferSize: 1024,
+			ReadBufferSize:   1024,
+			WriteBufferSize:  1024,
+			HandshakeTimeout: 5 * time.Second,
 		},
 		KeepAlivePingInterval: 10 * time.Second,
 		PingPongInterval:      time.Second,
