@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
 	jwtmiddleware "github.com/auth0/go-jwt-middleware/v2"
@@ -38,11 +39,16 @@ func NewRouter(e *echo.Echo, srv *handler.Server) *echo.Echo {
 		log.Fatalf("failed to set up the validator: %v", err)
 	}
 
-	// Configure WebSocket with CORS
+	srv.AddTransport(transport.POST{})
 	srv.AddTransport(&transport.Websocket{
 		Upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				return r.Header.Get(echo.HeaderOrigin) == origin
+				match := r.Header.Get(echo.HeaderOrigin) == origin
+				if !match {
+					log.Printf("websocket origin %q does not match expected %q",
+						r.Header.Get(echo.HeaderOrigin), origin)
+				}
+				return match
 			},
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -64,7 +70,7 @@ func NewRouter(e *echo.Echo, srv *handler.Server) *echo.Echo {
 			return context.WithValue(ctx, jwtmiddleware.ContextKey{}, claims), nil
 		},
 	})
-	srv.AddTransport(transport.POST{})
+	srv.Use(extension.Introspection{})
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
