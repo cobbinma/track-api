@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/99designs/gqlgen/graphql/handler"
-	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
 	jwtmiddleware "github.com/auth0/go-jwt-middleware/v2"
@@ -70,7 +69,6 @@ func NewRouter(e *echo.Echo, srv *handler.Server) *echo.Echo {
 			return context.WithValue(ctx, jwtmiddleware.ContextKey{}, claims), nil
 		},
 	})
-	srv.Use(extension.Introspection{})
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())

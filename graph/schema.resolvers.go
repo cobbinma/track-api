@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson"
 	"log"
 
 	"github.com/ably/ably-go/ably"
@@ -16,6 +15,7 @@ import (
 	"github.com/cobbinma/track-api/graph/generated"
 	"github.com/cobbinma/track-api/graph/model"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func (r *mutationResolver) CreateJourney(ctx context.Context) (*model.Journey, error) {
