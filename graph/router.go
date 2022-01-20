@@ -53,6 +53,7 @@ func NewRouter(e *echo.Echo, srv *handler.Server) *echo.Echo {
 			WriteBufferSize: 1024,
 		},
 		KeepAlivePingInterval: 10 * time.Second,
+		PingPongInterval:      time.Second,
 		InitFunc: func(ctx context.Context, p transport.InitPayload) (context.Context, error) {
 			token, err := jwtValidator.ValidateToken(ctx, strings.TrimPrefix(p.Authorization(), "Bearer "))
 			if err != nil {
