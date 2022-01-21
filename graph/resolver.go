@@ -6,7 +6,6 @@ import (
 	"github.com/cobbinma/track-api/repositories/postgres"
 	"github.com/rs/zerolog/log"
 	"os"
-	"sync"
 )
 
 // This file will not be regenerated automatically.
@@ -15,7 +14,6 @@ import (
 
 type Resolver struct {
 	queue      *ably.Realtime
-	mu         sync.RWMutex // nolint: structcheck
 	repository *postgres.Client
 }
 

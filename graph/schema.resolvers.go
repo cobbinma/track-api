@@ -184,7 +184,6 @@ func (r *subscriptionResolver) Journey(ctx context.Context, id string) (<-chan *
 				return
 			}
 			log.Error().Err(err).Msgf("unsupported message type: %T", msg.Data)
-			return
 		})
 		if err != nil {
 			log.Error().Err(err).Msgf("unable to subscribe")

@@ -44,6 +44,9 @@ func NewPostgres(url url.URL, migrationsUrl string) (*Client, error) {
 	}
 
 	driver, err := postgres.WithInstance(db.DB, &postgres.Config{})
+	if err != nil {
+		return nil, err
+	}
 	m, err := migrate.NewWithDatabaseInstance(
 		migrationsUrl,
 		"postgres", driver)
