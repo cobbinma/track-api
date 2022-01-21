@@ -12,7 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"log"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
 	"os"
@@ -24,7 +24,7 @@ func NewRouter(e *echo.Echo, srv *handler.Server) *echo.Echo {
 	origin := os.Getenv("ORIGIN")
 	issuerURL, err := url.Parse(fmt.Sprintf("https://%s/", os.Getenv("AUTH0_DOMAIN")))
 	if err != nil {
-		log.Fatalf("failed to parse the issuer url: %v", err)
+		log.Fatal().Err(err).Msg("failed to parse the issuer url")
 	}
 
 	// Set up the validator.
@@ -35,7 +35,7 @@ func NewRouter(e *echo.Echo, srv *handler.Server) *echo.Echo {
 		[]string{os.Getenv("AUTH0_AUDIENCE")},
 	)
 	if err != nil {
-		log.Fatalf("failed to set up the validator: %v", err)
+		log.Fatal().Err(err).Msg("failed to set up the validator")
 	}
 
 	srv.AddTransport(transport.POST{})
@@ -44,8 +44,8 @@ func NewRouter(e *echo.Echo, srv *handler.Server) *echo.Echo {
 			CheckOrigin: func(r *http.Request) bool {
 				match := r.Header.Get(echo.HeaderOrigin) == origin
 				if !match {
-					log.Printf("websocket origin %q does not match expected %q",
-						r.Header.Get(echo.HeaderOrigin), origin)
+					log.Warn().Str("origin", r.Header.Get(echo.HeaderOrigin)).
+						Str("expected", origin).Msg("websocket origin does not match expected")
 				}
 				return match
 			},
@@ -58,14 +58,14 @@ func NewRouter(e *echo.Echo, srv *handler.Server) *echo.Echo {
 		InitFunc: func(ctx context.Context, p transport.InitPayload) (context.Context, error) {
 			token, err := jwtValidator.ValidateToken(ctx, strings.TrimPrefix(p.Authorization(), "Bearer "))
 			if err != nil {
-				log.Println("unable to initialise websocket connection : ", err)
-				return nil, err
+				log.Warn().Err(err).Msg("unable to initialise websocket connection")
+				return nil, ErrUnAuthorized
 			}
 
 			claims, ok := token.(*validator.ValidatedClaims)
 			if !ok {
-				log.Println("unexpected token format")
-				return nil, err
+				log.Warn().Msg("unexpected token format")
+				return nil, ErrUnAuthorized
 			}
 
 			return context.WithValue(ctx, jwtmiddleware.ContextKey{}, claims), nil

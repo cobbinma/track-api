@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/ably/ably-go/ably"
 	jwtmiddleware "github.com/auth0/go-jwt-middleware/v2"
@@ -15,14 +14,21 @@ import (
 	"github.com/cobbinma/track-api/graph/generated"
 	"github.com/cobbinma/track-api/graph/model"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+)
+
+var (
+	ErrUnAuthorized = fmt.Errorf("unauthorized")
+	ErrUnexpected   = fmt.Errorf("unexpected error")
+	ErrBadRequest   = fmt.Errorf("bad request")
 )
 
 func (r *mutationResolver) CreateJourney(ctx context.Context) (*model.Journey, error) {
 	id := uuid.New()
 	claims, ok := ctx.Value(jwtmiddleware.ContextKey{}).(*validator.ValidatedClaims)
 	if !ok {
-		log.Println("no claims in context")
-		return nil, fmt.Errorf("no claims")
+		log.Warn().Msg("no claims in context")
+		return nil, ErrUnAuthorized
 	}
 
 	journey := &model.Journey{
@@ -32,8 +38,8 @@ func (r *mutationResolver) CreateJourney(ctx context.Context) (*model.Journey, e
 	}
 
 	if err := r.repository.CreateJourney(ctx, journey); err != nil {
-		log.Printf("unable to create journey : %s", err)
-		return nil, fmt.Errorf("unable to create journey")
+		log.Error().Err(err).Msg("unable to create journey in repository")
+		return nil, ErrUnexpected
 	}
 
 	return journey, nil
@@ -42,19 +48,20 @@ func (r *mutationResolver) CreateJourney(ctx context.Context) (*model.Journey, e
 func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.UpdateJourneyStatus) (*model.Journey, error) {
 	claims, ok := ctx.Value(jwtmiddleware.ContextKey{}).(*validator.ValidatedClaims)
 	if !ok {
-		log.Println("no claims in context")
-		return nil, fmt.Errorf("no claims in context")
+		log.Warn().Msg("no claims in context")
+		return nil, ErrUnAuthorized
 	}
 
 	journey, err := r.repository.GetJourney(ctx, input.ID)
 	if err != nil {
-		log.Printf("unable to get journey : %s", err)
-		return nil, fmt.Errorf("unable to get journey")
+		log.Error().Err(err).Msg("unable to get journey from repository")
+		return nil, ErrUnexpected
 	}
 
 	if user := claims.RegisteredClaims.Subject; journey.User.ID != user {
-		log.Printf("unauthorized subject %q attempting to update journey %q", user, journey.ID)
-		return nil, fmt.Errorf("unauthorized")
+		log.Warn().Str("subject", user).Str("journeyId", journey.ID).
+			Msg("unauthorized subject attempting to update journey")
+		return nil, ErrUnAuthorized
 	}
 
 	switch {
@@ -62,7 +69,7 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 		break
 	case journey.Status == model.JourneyStatusComplete:
 		{
-			log.Printf("journey %q is already complete\n", input.ID)
+			log.Warn().Str("journeyId", input.ID).Msg("journey is already complete")
 			break
 		}
 	case journey.Status == model.JourneyStatusActive, input.Status == model.JourneyStatusComplete:
@@ -71,30 +78,31 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 			journey.Position = nil
 
 			if err := r.repository.UpdatePosition(ctx, journey.ID, journey.Position); err != nil {
-				log.Printf("unable to update position : %s\n", err)
-				return nil, fmt.Errorf("unable to update position")
+				log.Error().Err(err).Msg("unable to update position in repository")
+				return nil, ErrUnexpected
 			}
 
 			if err := r.repository.UpdateStatus(ctx, journey.ID, journey.Status); err != nil {
-				log.Printf("unable to update status : %s\n", err)
-				return nil, fmt.Errorf("unable to update status")
+				log.Error().Err(err).Msg("unable to update status in repository")
+				return nil, ErrUnexpected
 			}
 
 			message, err := json.Marshal(journey)
 			if err != nil {
-				log.Println("unable to marshal : ", err)
-				return nil, err
+				log.Error().Err(err).Msg("unable to marshal message")
+				return nil, ErrUnexpected
 			}
+
 			if err := r.queue.Channels.Get(input.ID).
 				Publish(ctx, "JourneyUpdate", string(message)); err != nil {
-				log.Println("unable to publish : ", err)
-				return nil, err
+				log.Error().Err(err).Str("journeyId", input.ID).Msg("unable to publish message in queue")
+				return nil, ErrUnexpected
 			}
 		}
 	default:
-		log.Printf("unrecognised condition : journey status %q, input status %q\n",
-			journey.Status, input.Status)
-		return nil, fmt.Errorf("unrecognised state")
+		log.Error().Str("current_status", journey.Status.String()).
+			Str("input_status", input.Status.String()).Msg("unrecognised condition")
+		return nil, ErrUnexpected
 	}
 
 	return journey, nil
@@ -103,63 +111,63 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 func (r *mutationResolver) UpdateJourneyPosition(ctx context.Context, input model.UpdateJourneyPosition) (*model.Journey, error) {
 	claims, ok := ctx.Value(jwtmiddleware.ContextKey{}).(*validator.ValidatedClaims)
 	if !ok {
-		log.Println("no claims in context")
-		return nil, fmt.Errorf("no claims in context")
+		log.Warn().Msg("no claims in context")
+		return nil, ErrUnAuthorized
 	}
 
 	journey, err := r.repository.GetJourney(ctx, input.ID)
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Msg("unable to get journey from repository")
+		return nil, ErrUnexpected
 	}
 
 	if user := claims.RegisteredClaims.Subject; journey.User.ID != user {
-		log.Printf("unauthorized subject %q attempting to update journey %q", user, journey.ID)
-		return nil, fmt.Errorf("unauthorized")
+		log.Warn().Str("subject", user).Str("journeyId", journey.ID).
+			Msg("unauthorized subject attempting to update journey")
 	}
 
 	if status := journey.Status; status != model.JourneyStatusActive {
-		log.Printf("unable to update position for journey %q, status is %q", journey.ID, status)
-		return nil, fmt.Errorf("unsupported update status")
+		log.Warn().Str("journeyId", journey.ID).Str("status", status.String()).
+			Msg("unsupported update position status")
+		return nil, ErrBadRequest
 	}
 
-	log.Println("updating journey status")
 	journey.Position = &model.Position{
 		Lat: input.Position.Lat,
 		Lng: input.Position.Lng,
 	}
 
 	if err := r.repository.UpdatePosition(ctx, journey.ID, journey.Position); err != nil {
-		log.Printf("unable to update position : %s\n", err)
-		return nil, fmt.Errorf("unable to update position")
+		log.Error().Err(err).Msg("unable to update position in repository")
+		return nil, ErrUnexpected
 	}
 
-	channel := r.queue.Channels.Get(input.ID)
 	message, err := json.Marshal(journey)
 	if err != nil {
-		log.Println("unable to marshal : ", err)
-		return nil, err
+		log.Error().Err(err).Msg("unable to marshal message")
+		return nil, ErrUnexpected
 	}
-	if err := channel.Publish(ctx, "JourneyUpdate", string(message)); err != nil {
-		log.Println("unable to publish : ", err)
-		return nil, err
+
+	if err := r.queue.Channels.Get(input.ID).Publish(ctx, "JourneyUpdate", string(message)); err != nil {
+		log.Error().Err(err).Str("journeyId", input.ID).Msg("unable to publish message in queue")
+		return nil, ErrUnexpected
 	}
 
 	return journey, nil
 }
 
 func (r *subscriptionResolver) Journey(ctx context.Context, id string) (<-chan *model.Journey, error) {
-	claims, ok := ctx.Value(jwtmiddleware.ContextKey{}).(*validator.ValidatedClaims)
-	if !ok {
-		log.Println("no claims in context")
-		return nil, fmt.Errorf("no claims in context")
+	if _, ok := ctx.Value(jwtmiddleware.ContextKey{}).(*validator.ValidatedClaims); !ok {
+		log.Warn().Msg("no claims in context")
+		return nil, ErrUnAuthorized
 	}
-	log.Printf("%q followed journey: %q\n", claims.RegisteredClaims.Subject, id)
+
 	ch := make(chan *model.Journey, 1)
 
 	journey, err := r.repository.GetJourney(ctx, id)
 	if err != nil {
-		log.Printf("unable to get journey : %s\n", err)
-		return nil, fmt.Errorf("unable to get journey")
+		log.Error().Err(err).Msg("unable to get journey from repository")
+		return nil, ErrUnexpected
 	}
 
 	ch <- journey
@@ -169,17 +177,17 @@ func (r *subscriptionResolver) Journey(ctx context.Context, id string) (<-chan *
 			if data, ok := msg.Data.(string); ok {
 				var j = &model.Journey{}
 				if err := json.Unmarshal([]byte(data), j); err != nil {
-					log.Println("unable to unmarshal : ", err)
+					log.Error().Err(err).Msg("unable to unmarshal message")
 					return
 				}
 				ch <- j
 			} else {
-				log.Println(fmt.Sprintf("unsupported message type: %T", msg.Data))
+				log.Error().Err(err).Msgf("unsupported message type: %T", msg.Data)
 				return
 			}
 		})
 		if err != nil {
-			log.Println("unable to subscribe : ", err)
+			log.Error().Err(err).Msgf("unable to subscribe")
 			return
 		}
 

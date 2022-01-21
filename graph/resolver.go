@@ -3,9 +3,8 @@ package graph
 
 import (
 	"github.com/ably/ably-go/ably"
-	"github.com/cobbinma/track-api/graph/model"
 	"github.com/cobbinma/track-api/repositories/postgres"
-	"log"
+	"github.com/rs/zerolog/log"
 	"os"
 	"sync"
 )
@@ -17,28 +16,22 @@ import (
 type Resolver struct {
 	queue      *ably.Realtime
 	mu         sync.RWMutex // nolint: structcheck
-	rooms      map[string]*Room
 	repository *postgres.Client
-}
-
-type Room struct {
-	journey *model.Journey
 }
 
 func NewResolver(repository *postgres.Client) *Resolver {
 	key := os.Getenv("ABLY_API_KEY")
 	if key == "" {
-		log.Fatalf("key not given")
+		log.Fatal().Str("key", "ABLY_API_KEY").Msg("key not given")
 	}
 
 	queue, err := ably.NewRealtime(ably.WithKey(key))
 	if err != nil {
-		log.Fatalf("unable to create ably client : %s", err)
+		log.Fatal().Err(err).Msg("unable to create ably client")
 	}
 
 	return &Resolver{
 		queue:      queue,
-		rooms:      map[string]*Room{},
 		repository: repository,
 	}
 }
