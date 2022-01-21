@@ -1,15 +1,13 @@
 package main
 
 import (
-	"context"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/cobbinma/track-api/graph"
 	"github.com/cobbinma/track-api/graph/generated"
+	"github.com/cobbinma/track-api/repositories/postgres"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"net/url"
 	"os"
 )
 
@@ -18,22 +16,13 @@ const defaultPort = "8080"
 func main() {
 	_ = godotenv.Load()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	client, err := mongo.Connect(ctx, options.Client().
-		ApplyURI(os.Getenv("MONGO_DB_URL")).
-		SetServerAPIOptions(options.ServerAPI(options.ServerAPIVersion1)))
+	dbu, err := url.Parse(os.Getenv("DATABASE_URL"))
 	if err != nil {
 		panic(err)
 	}
-	defer func() {
-		if err = client.Disconnect(ctx); err != nil {
-			panic(err)
-		}
-	}()
 
-	if err := client.Ping(ctx, readpref.Primary()); err != nil {
+	pg, err := postgres.NewPostgres(*dbu, "file://repositories/postgres/migrations")
+	if err != nil {
 		panic(err)
 	}
 
@@ -43,6 +32,6 @@ func main() {
 	}
 
 	e := graph.NewRouter(echo.New(), handler.New(
-		generated.NewExecutableSchema(generated.Config{Resolvers: graph.NewResolver(client)})))
+		generated.NewExecutableSchema(generated.Config{Resolvers: graph.NewResolver(pg)})))
 	e.Logger.Fatal(e.Start(":" + port))
 }
