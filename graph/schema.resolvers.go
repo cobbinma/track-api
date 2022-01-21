@@ -60,28 +60,39 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 		return nil, fmt.Errorf("unauthorized")
 	}
 
-	if journey.Status != input.Status {
-		log.Println("updating journey status")
-		journey.Status = input.Status
-		if input.Status == model.JourneyStatusComplete {
+	switch {
+	case journey.Status == input.Status:
+		break
+	case journey.Status == model.JourneyStatusComplete:
+		{
+			log.Printf("journey %q is already complete\n", input.ID)
+			break
+		}
+	case journey.Status == model.JourneyStatusActive, input.Status == model.JourneyStatusComplete:
+		{
+			journey.Status = input.Status
 			journey.Position = nil
-		}
 
-		if _, err := collection.InsertOne(ctx, journey); err != nil {
-			log.Printf("unable to insert journey : %s", err)
-			return nil, fmt.Errorf("unable to insert journey")
-		}
+			if _, err := collection.InsertOne(ctx, journey); err != nil {
+				log.Printf("unable to insert journey : %s", err)
+				return nil, fmt.Errorf("unable to insert journey")
+			}
 
-		channel := r.queue.Channels.Get(input.ID)
-		message, err := json.Marshal(journey)
-		if err != nil {
-			log.Println("unable to marshal : ", err)
-			return nil, err
+			message, err := json.Marshal(journey)
+			if err != nil {
+				log.Println("unable to marshal : ", err)
+				return nil, err
+			}
+			if err := r.queue.Channels.Get(input.ID).
+				Publish(ctx, "JourneyUpdate", string(message)); err != nil {
+				log.Println("unable to publish : ", err)
+				return nil, err
+			}
 		}
-		if err := channel.Publish(ctx, "JourneyUpdate", string(message)); err != nil {
-			log.Println("unable to publish : ", err)
-			return nil, err
-		}
+	default:
+		log.Printf("unrecognised condition : journey status %q, input status %q\n",
+			journey.Status, input.Status)
+		return nil, fmt.Errorf("unrecognised state")
 	}
 
 	return journey, nil
