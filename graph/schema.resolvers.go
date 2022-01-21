@@ -15,7 +15,6 @@ import (
 	"github.com/cobbinma/track-api/graph/generated"
 	"github.com/cobbinma/track-api/graph/model"
 	"github.com/google/uuid"
-	"go.mongodb.org/mongo-driver/bson"
 )
 
 func (r *mutationResolver) CreateJourney(ctx context.Context) (*model.Journey, error) {
@@ -32,10 +31,9 @@ func (r *mutationResolver) CreateJourney(ctx context.Context) (*model.Journey, e
 		Status: model.JourneyStatusActive,
 	}
 
-	if _, err := r.mongo.Database("track_db").
-		Collection("journeys").InsertOne(ctx, journey); err != nil {
-		log.Printf("unable to insert journey : %s", err)
-		return nil, fmt.Errorf("unable to insert journey")
+	if err := r.repository.CreateJourney(ctx, journey); err != nil {
+		log.Printf("unable to create journey : %s", err)
+		return nil, fmt.Errorf("unable to create journey")
 	}
 
 	return journey, nil
@@ -48,11 +46,10 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 		return nil, fmt.Errorf("no claims in context")
 	}
 
-	var journey = &model.Journey{}
-	collection := r.mongo.Database("track_db").Collection("journeys")
-	if err := collection.FindOne(ctx, bson.D{{"id", input.ID}}).Decode(journey); err != nil {
-		log.Printf("unable to find journey : %s", err)
-		return nil, fmt.Errorf("journey not found")
+	journey, err := r.repository.GetJourney(ctx, input.ID)
+	if err != nil {
+		log.Printf("unable to get journey : %s", err)
+		return nil, fmt.Errorf("unable to get journey")
 	}
 
 	if user := claims.RegisteredClaims.Subject; journey.User.ID != user {
@@ -73,9 +70,14 @@ func (r *mutationResolver) UpdateJourneyStatus(ctx context.Context, input model.
 			journey.Status = input.Status
 			journey.Position = nil
 
-			if _, err := collection.InsertOne(ctx, journey); err != nil {
-				log.Printf("unable to insert journey : %s", err)
-				return nil, fmt.Errorf("unable to insert journey")
+			if err := r.repository.UpdatePosition(ctx, journey.ID, journey.Position); err != nil {
+				log.Printf("unable to update position : %s\n", err)
+				return nil, fmt.Errorf("unable to update position")
+			}
+
+			if err := r.repository.UpdateStatus(ctx, journey.ID, journey.Status); err != nil {
+				log.Printf("unable to update status : %s\n", err)
+				return nil, fmt.Errorf("unable to update status")
 			}
 
 			message, err := json.Marshal(journey)
@@ -105,11 +107,9 @@ func (r *mutationResolver) UpdateJourneyPosition(ctx context.Context, input mode
 		return nil, fmt.Errorf("no claims in context")
 	}
 
-	var journey = &model.Journey{}
-	collection := r.mongo.Database("track_db").Collection("journeys")
-	if err := collection.FindOne(ctx, bson.D{{"id", input.ID}}).Decode(journey); err != nil {
-		log.Printf("unable to find journey : %s", err)
-		return nil, fmt.Errorf("journey not found")
+	journey, err := r.repository.GetJourney(ctx, input.ID)
+	if err != nil {
+		return nil, err
 	}
 
 	if user := claims.RegisteredClaims.Subject; journey.User.ID != user {
@@ -128,9 +128,9 @@ func (r *mutationResolver) UpdateJourneyPosition(ctx context.Context, input mode
 		Lng: input.Position.Lng,
 	}
 
-	if _, err := collection.InsertOne(ctx, journey); err != nil {
-		log.Println("unable to insert journey in mongodb : ", err)
-		return nil, fmt.Errorf("unable to insert journey")
+	if err := r.repository.UpdatePosition(ctx, journey.ID, journey.Position); err != nil {
+		log.Printf("unable to update position : %s\n", err)
+		return nil, fmt.Errorf("unable to update position")
 	}
 
 	channel := r.queue.Channels.Get(input.ID)
@@ -156,12 +156,12 @@ func (r *subscriptionResolver) Journey(ctx context.Context, id string) (<-chan *
 	log.Printf("%q followed journey: %q\n", claims.RegisteredClaims.Subject, id)
 	ch := make(chan *model.Journey, 1)
 
-	var journey = &model.Journey{}
-	if err := r.mongo.Database("track_db").Collection("journeys").
-		FindOne(ctx, bson.D{{"id", id}}).Decode(journey); err != nil {
-		log.Println("unable to find journey : ", err)
-		return nil, fmt.Errorf("journey not found")
+	journey, err := r.repository.GetJourney(ctx, id)
+	if err != nil {
+		log.Printf("unable to get journey : %s\n", err)
+		return nil, fmt.Errorf("unable to get journey")
 	}
+
 	ch <- journey
 
 	go func(ch chan *model.Journey) {
