@@ -172,7 +172,7 @@ func (r *subscriptionResolver) Journey(ctx context.Context, id string) (<-chan *
 
 	ch <- journey
 
-	go func(ch chan *model.Journey) {
+	go func(ch chan<- *model.Journey) {
 		unsubscribe, err := r.queue.Channels.Get(id).SubscribeAll(ctx, func(msg *ably.Message) {
 			if data, ok := msg.Data.(string); ok {
 				var j = &model.Journey{}
@@ -181,10 +181,10 @@ func (r *subscriptionResolver) Journey(ctx context.Context, id string) (<-chan *
 					return
 				}
 				ch <- j
-			} else {
-				log.Error().Err(err).Msgf("unsupported message type: %T", msg.Data)
 				return
 			}
+			log.Error().Err(err).Msgf("unsupported message type: %T", msg.Data)
+			return
 		})
 		if err != nil {
 			log.Error().Err(err).Msgf("unable to subscribe")
