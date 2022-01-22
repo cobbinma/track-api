@@ -8,6 +8,11 @@
 <br />
 
 <div align="center">
+  <!-- docs.rs track-ui repository -->
+  <a href="https://github.com/cobbinma/track-ui">
+  <img src="https://img.shields.io/badge/track-ui-blue?style=flat-square&logo=github"
+      alt="track-ui repository" />
+  </a>
  <br />
  <img src="./screenshot.png" width="200">
 </div>
